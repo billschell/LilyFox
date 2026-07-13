@@ -44,7 +44,7 @@ void FoxDisplay::show(bool beaconActive, const char *activity)
 
     oled_.setTextSize(1);
     oled_.setCursor(0, 0);
-    oled_.printf("W2WZ LilyFox  %.3f", foxconfig::TX_FREQUENCY_MHZ);
+    oled_.printf("%s LilyFox %.3f", foxconfig::CALLSIGN, foxconfig::FREQUENCY_MHZ);
 
     oled_.setTextSize(2);
     oled_.setCursor(0, 18);

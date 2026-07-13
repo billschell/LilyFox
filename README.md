@@ -59,18 +59,23 @@ Everything is in [include/fox_config.h](include/fox_config.h):
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `MESSAGE` | `fox fox fox fox de W2WZ` | Text to send (A–Z, 0–9, space, `. , ? / = -`) |
-| `WORDS_PER_MINUTE` | `10` | Morse speed (PARIS standard) |
+| `FOX_CALLSIGN` | `W2WZ` | Station callsign, used in the beacon message, morse ID, and display |
+| `MESSAGE` | `fox fox fox fox de <callsign>` | Morse beacon text (A–Z, 0–9, space, `. , ? / = -`) |
+| `WORDS_PER_MINUTE` | `20` | Morse speed (PARIS standard) |
 | `TX_WINDOW_SECONDS` | `30` | Transmit window at the start of each cycle |
 | `PERIOD_SECONDS` | `60` | Full cycle length |
-| `TX_FREQUENCY_MHZ` | `146.5650` | Transmit frequency (must be in the module's band) |
+| `FREQUENCY_MHZ` | `146.5650` | Operating frequency, TX and RX (12.5/25 kHz multiple) |
 | `TONE_HZ` | `800` | Audio tone frequency |
-| `USE_HIGH_POWER` | `false` | `false` ≈ 0.5 W, `true` ≈ 1 W |
+| `USE_HIGH_POWER` | `false` | `false` = low (~0.5 W), `true` = high |
+| `SQUELCH_LEVEL` | `1` | Receiver squelch, 0–8 |
 | `START_ENABLED` | `true` | Whether the beacon transmits right after boot |
 | `VOICE_ENABLED` | `true` | Play SD-card recordings when present |
-| `MORSE_ID` | `de W2WZ` | Morse identification after each recording |
+| `MORSE_ID` | `de <callsign>` | Morse identification after each recording |
 | `VOICE_ID_GAP_MS` | `400` | Silence between recording and morse ID |
 | `VOICE_GAIN` | `170` | Playback level (170 = full-scale WAV at max clean drive) |
+
+CTCSS/CDCSS is always off (the `AT+DMOSETGROUP` CXCSS fields are fixed
+at `0000`), per the NiceRF SA868S serial protocol.
 
 Edit, then rebuild and reflash.
 

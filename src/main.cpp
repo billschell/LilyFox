@@ -111,7 +111,7 @@ void FoxController::begin()
     // reattach so boot logs are not lost (the monitor no longer resets
     // the board now that DTR/RTS are left alone).
     delay(3000);
-    Serial.println("W2WZ LilyFox morse fox beacon starting");
+    Serial.printf("%s LilyFox fox beacon starting\n", foxconfig::CALLSIGN);
     Serial.printf("Last reset: %s\n", resetReasonName(esp_reset_reason()));
 
     if (!pmu_online)
@@ -162,12 +162,17 @@ void FoxController::begin()
         }
     }
 
-    bool frequency_set = false;
-    for (int attempt = 1; attempt <= 3 && !frequency_set; attempt++)
-        frequency_set = radio_.setFrequency(foxconfig::TX_FREQUENCY_MHZ);
-    if (!frequency_set)
+    bool radio_configured = false;
+    for (int attempt = 1; attempt <= 3 && !radio_configured; attempt++)
+        radio_configured = radio_.configure(foxconfig::USE_HIGH_POWER,
+                                            foxconfig::FREQUENCY_MHZ,
+                                            foxconfig::SQUELCH_LEVEL);
+    if (!radio_configured)
         _haltWithError("SA868 rejected AT+DMOSETGROUP (frequency out of band?)");
-    Serial.printf("Frequency set to %.4f MHz\n", foxconfig::TX_FREQUENCY_MHZ);
+    Serial.printf("Radio configured: %.4f MHz simplex, %s power, squelch %u, "
+                  "no CTCSS\n", foxconfig::FREQUENCY_MHZ,
+                  foxconfig::USE_HIGH_POWER ? "high" : "low",
+                  foxconfig::SQUELCH_LEVEL);
 
     audio_.begin(boardpins::ESP_TO_MIC, foxconfig::TONE_HZ);
 

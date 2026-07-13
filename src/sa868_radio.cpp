@@ -34,8 +34,7 @@ Sa868Radio::ProbeResult Sa868Radio::begin()
     pinMode(boardpins::SA868_PTT, OUTPUT);
     digitalWrite(boardpins::SA868_PTT, HIGH); // PTT idle (active LOW)
 
-    pinMode(boardpins::SA868_HIGH_LOW, OUTPUT);
-    digitalWrite(boardpins::SA868_HIGH_LOW, LOW); // low RF power
+    _setPowerPin(false); // low RF power until keyed otherwise
 
     pinMode(boardpins::MIC_SELECT, OUTPUT);
     digitalWrite(boardpins::MIC_SELECT, HIGH); // route ESP audio to mic input
@@ -60,6 +59,18 @@ Sa868Radio::ProbeResult Sa868Radio::begin()
                       static_cast<unsigned long>(baud));
         serial_.updateBaudRate(baud);
         const ProbeResult result = _probeAtCurrentBaud();
+        if (result == ProbeResult::STOCK_OK)
+        {
+            // Classic SA868 vs SA868S: only the S answers AT+MODEL.
+            // Their DMOSETGROUP first fields differ (bandwidth vs TX
+            // power), so configure() needs to know which one this is.
+            String model;
+            s_series_ = _command("AT+MODEL", model, RESPONSE_TIMEOUT_MS) &&
+                        model.indexOf("SA868S") >= 0;
+            Serial.printf("Module variant: %s\n",
+                          s_series_ ? "SA868S (S-series)" : "classic SA868");
+            return result;
+        }
         if (result != ProbeResult::NO_RESPONSE)
             return result;
     }
@@ -119,40 +130,66 @@ Sa868Radio::ProbeResult Sa868Radio::_probeAtCurrentBaud()
     return ProbeResult::NO_RESPONSE;
 }
 
-bool Sa868Radio::setFrequency(double frequencyMhz)
+bool Sa868Radio::configure(bool highPower, double frequencyMhz, uint8_t squelchLevel)
 {
-    // band 0 = 12.5 kHz, TX freq, RX freq, TX CTCSS off, squelch, RX CTCSS off
+    // AT+DMOSETGROUP=<first>,TFV,RFV,Tx_CXCSS,SQ,Rx_CXCSS with
+    // "0000" = no CTCSS/CDCSS. The first field differs by module
+    // generation (detected via AT+MODEL in begin()):
+    //   SA868S (v1.7 datasheet): TX power, 0 = high, 1 = low
+    //   classic SA868 (v1.2):    bandwidth, 0 = 12.5 kHz, 1 = 25 kHz
+    //                            (power is set by the H/L pin only)
+    const int first_field = s_series_ ? (highPower ? 0 : 1) : 0;
     char group_command[80];
     snprintf(group_command, sizeof(group_command),
-             "AT+DMOSETGROUP=0,%.4f,%.4f,0000,4,0000", frequencyMhz, frequencyMhz);
+             "AT+DMOSETGROUP=%d,%.4f,%.4f,0000,%u,0000",
+             first_field, frequencyMhz, frequencyMhz, squelchLevel);
 
     String response;
     const bool group_ok = _command(group_command, response, 2000);
     if (!group_ok)
         return false;
 
-    // No squelch tail burst. Bypass the TX audio filters (1,1,1), same
-    // as the LilyGO factory firmware and ESP32APRS: with pre-emphasis
-    // OFF, the receiver's de-emphasis rolls off the mic-path AGC hiss
-    // by 6 dB/octave instead of hearing it flat, and the voice gets the
-    // classic mellow comms sound. (Measured A/B against the factory
-    // firmware; the earlier 0,0,0 setting made both voice and hiss
-    // arrive spectrally flat and harsh.)
+    // Disable the CTCSS squelch-tail-eliminator burst at unkey. Not in
+    // the SA868/SA868S datasheets, but documented for the sibling SA818
+    // and acknowledged by this module ("+DMOSETTAIL:0"); moot with
+    // CTCSS off, kept as insurance against a tail burst on the air.
+    //
+    // Bypass pre-emphasis and high-pass (first two SETFILTER fields):
+    // with pre-emphasis OFF, the receiver's de-emphasis rolls off the
+    // mic-path AGC hiss by 6 dB/octave instead of hearing it flat, and
+    // the voice gets the classic mellow comms sound. (Measured A/B
+    // against the LilyGO factory firmware, which bypasses all three;
+    // the earlier 0,0,0 setting made voice and hiss arrive spectrally
+    // flat and harsh.)
     _command("AT+SETTAIL=0", response, RESPONSE_TIMEOUT_MS);
     _command("AT+SETFILTER=1,1,1", response, RESPONSE_TIMEOUT_MS);
+
     return true;
 }
 
 void Sa868Radio::pttOn(bool highPower)
 {
-    digitalWrite(boardpins::SA868_HIGH_LOW, highPower ? HIGH : LOW);
+    _setPowerPin(highPower);
     digitalWrite(boardpins::SA868_PTT, LOW);
 }
 
 void Sa868Radio::pttOff()
 {
     digitalWrite(boardpins::SA868_PTT, HIGH);
-    digitalWrite(boardpins::SA868_HIGH_LOW, LOW);
+    _setPowerPin(false);
+}
+
+void Sa868Radio::_setPowerPin(bool highPower)
+{
+    if (highPower)
+    {
+        pinMode(boardpins::SA868_HIGH_LOW, INPUT); // float = high power
+    }
+    else
+    {
+        pinMode(boardpins::SA868_HIGH_LOW, OUTPUT);
+        digitalWrite(boardpins::SA868_HIGH_LOW, LOW);
+    }
 }
 
 bool Sa868Radio::_command(const char *command, String &response, uint32_t timeoutMs)

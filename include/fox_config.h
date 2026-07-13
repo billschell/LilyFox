@@ -6,12 +6,19 @@
 
 #include <stdint.h>
 
+// Station callsign. Used in the morse beacon message, the morse ID
+// after each voice recording, and the display header. (A macro so the
+// message strings below can be composed at compile time.)
+#define FOX_CALLSIGN "W2WZ"
+
 namespace foxconfig
 {
 
+inline constexpr char CALLSIGN[] = FOX_CALLSIGN;
+
 // Text sent in morse code. Case is ignored (morse has no case).
 // Supported characters: A-Z, 0-9, space, and . , ? / = -
-inline constexpr char MESSAGE[] = "fox fox fox fox de W2WZ";
+inline constexpr char MESSAGE[] = "fox fox fox fox de " FOX_CALLSIGN;
 
 // Morse speed in words per minute (PARIS standard).
 // Note: at 10 WPM the default message above takes ~29.6 s to send.
@@ -26,15 +33,21 @@ inline constexpr uint32_t WORDS_PER_MINUTE = 20;
 inline constexpr uint32_t TX_WINDOW_SECONDS = 30;
 inline constexpr uint32_t PERIOD_SECONDS = 60;
 
-// Transmit frequency in MHz.  146.5650 is the common US 2 m fox-hunt
-// frequency.  Must be within your SA868 module's band (VHF: 134-174 MHz).
-inline constexpr double TX_FREQUENCY_MHZ = 146.5650;
+// Operating frequency in MHz, used for both transmit and receive.
+// 146.5650 is the common US 2 m fox-hunt frequency. Must be within
+// your SA868 module's band,as allowed by your amateur radio
+// license and a multiple of 12.5 or 25 kHz.
+inline constexpr double FREQUENCY_MHZ = 146.5650;
 
 // Audio tone frequency in Hz (typical fox/CW tones: 600-1000).
 inline constexpr uint32_t TONE_HZ = 800;
 
-// RF power: false = low (~0.5 W), true = high (~1 W).
+// RF power: false = low (~0.5 W), true = high (~2 W on SA868S).
 inline constexpr bool USE_HIGH_POWER = false;
+
+// Receiver squelch level, 0-8 (0 = monitor/open). Only matters when
+// listening; the fox transmits regardless.
+inline constexpr uint8_t SQUELCH_LEVEL = 8;
 
 // Whether the beacon starts transmitting right after boot. Either way,
 // a click of the rotary encoder toggles it on/off at any time.
@@ -49,7 +62,7 @@ inline constexpr bool START_ENABLED = true;
 inline constexpr bool VOICE_ENABLED = true;
 
 // Morse identification appended after each voice recording.
-inline constexpr char MORSE_ID[] = "de W2WZ";
+inline constexpr char MORSE_ID[] = "de " FOX_CALLSIGN;
 
 // Silence between the end of the recording and the morse ID.
 inline constexpr uint32_t VOICE_ID_GAP_MS = 400;
@@ -66,8 +79,7 @@ inline constexpr int32_t VOICE_GAIN = 170;
 // peaks clean. The SA868's mic AGC amplifies its own hiss whenever the
 // input is quiet, so keeping the average drive high keeps the AGC
 // gain - and its noise - wound down.
-// inline constexpr bool VOICE_NORMALIZE = true;
-inline constexpr bool VOICE_NORMALIZE = false;
+inline constexpr bool VOICE_NORMALIZE = true;
 
 
 
