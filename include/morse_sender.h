@@ -3,9 +3,9 @@
 #include <stdint.h>
 #include <functional>
 
-#include "tone_output.h"
+#include "audio_output.h"
 
-// Converts text to morse code and sends it by keying a ToneOutput.
+// Converts text to morse code and sends it by keying an AudioOutput tone.
 // Timing follows the PARIS standard: dit = 1200 / WPM milliseconds,
 // dah = 3 dits, inter-element gap = 1 dit, inter-character gap = 3 dits,
 // word gap = 7 dits.
@@ -15,7 +15,7 @@ public:
     // Checked between morse elements; return true to stop sending.
     using AbortPredicate = std::function<bool()>;
 
-    MorseSender(ToneOutput &tone, uint32_t wordsPerMinute);
+    MorseSender(AudioOutput &tone, uint32_t wordsPerMinute);
 
     // Sends the whole message, blocking until done. Characters with no
     // morse mapping are skipped. If abort is provided and returns true,
@@ -34,6 +34,6 @@ private:
     // Returns false if aborted mid-pattern.
     bool _sendPattern(const char *pattern, const AbortPredicate &abort) const;
 
-    ToneOutput &tone_;
+    AudioOutput &tone_;
     uint32_t dit_ms_;
 };

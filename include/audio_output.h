@@ -38,7 +38,12 @@ public:
     // retry the rest when the ring has space). When the file is done,
     // wait for voiceDrained() then call endVoice(). abortVoice() stops
     // immediately and discards queued samples.
-    void startVoice(uint32_t sampleRateHz, int32_t gain);
+    //
+    // A constant pilot tone (pilotLevel > 0) is mixed in during voice
+    // mode to keep the SA868 mic AGC loaded through speech pauses; it
+    // sits below the radio's TX high-pass so it never reaches the air.
+    void startVoice(uint32_t sampleRateHz, int32_t gain,
+                    uint32_t pilotHz = 0, int32_t pilotLevel = 0);
     size_t queueVoice(const int16_t *samples, size_t count);
     bool voiceDrained() const;
     void endVoice();

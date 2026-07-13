@@ -14,8 +14,10 @@ public:
     // already-initialized I2C bus. Returns false if no display answers.
     bool begin();
 
-    // Shows "Beacon Active" or "Beacon Inactive" with a header line.
-    void showStatus(bool beaconActive);
+    // Shows "Beacon Active" / "Beacon Inactive" plus a one-line activity
+    // description of what the fox is doing right now (e.g. the file
+    // being played, "morse: de W2WZ", "next TX in 23s").
+    void show(bool beaconActive, const char *activity);
 
 private:
     Adafruit_SH1106G oled_{128, 64, &Wire, -1};

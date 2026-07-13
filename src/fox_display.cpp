@@ -34,7 +34,7 @@ bool FoxDisplay::begin()
     return available_;
 }
 
-void FoxDisplay::showStatus(bool beaconActive)
+void FoxDisplay::show(bool beaconActive, const char *activity)
 {
     if (!available_)
         return;
@@ -44,13 +44,19 @@ void FoxDisplay::showStatus(bool beaconActive)
 
     oled_.setTextSize(1);
     oled_.setCursor(0, 0);
-    oled_.printf("LilyFox  %.4f", foxconfig::TX_FREQUENCY_MHZ);
+    oled_.printf("W2WZ LilyFox  %.3f", foxconfig::TX_FREQUENCY_MHZ);
 
     oled_.setTextSize(2);
-    oled_.setCursor(0, 24);
+    oled_.setCursor(0, 18);
     oled_.print("Beacon");
-    oled_.setCursor(0, 44);
+    oled_.setCursor(0, 36);
     oled_.print(beaconActive ? "Active" : "Inactive");
+
+    oled_.setTextSize(1);
+    oled_.setCursor(0, 56);
+    char line[22]; // the display fits 21 characters per line
+    snprintf(line, sizeof(line), "%s", activity);
+    oled_.print(line);
 
     oled_.display();
 }

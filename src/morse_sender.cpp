@@ -35,7 +35,7 @@ constexpr MorseMapping MORSE_TABLE[] = {
 
 } // namespace
 
-MorseSender::MorseSender(ToneOutput &tone, uint32_t wordsPerMinute)
+MorseSender::MorseSender(AudioOutput &tone, uint32_t wordsPerMinute)
     : tone_{tone}, dit_ms_{1200 / wordsPerMinute}
 {
 }

@@ -1,11 +1,42 @@
 # LilyFox
 
-A minimal morse-code fox-hunt beacon for the **LilyGO T-TWR Plus V2.0**
-(ESP32-S3 + SA868 VHF module with stock NiceRF firmware).
+A fox-hunt beacon for the **LilyGO T-TWR Plus V2.0** (ESP32-S3 + SA868
+VHF module with stock NiceRF firmware).
 
-Out of the box it transmits `fox fox fox fox de W2WZ` in morse at 10 WPM
-on 146.5650 MHz for ~30 seconds at the start of every minute, at low
-power (~0.5 W).
+With `.wav` recordings on a micro-SD card, each transmission plays the
+next recording in alphabetical rotation followed by a morse ID
+(`de W2WZ`), ~30 seconds of transmission at the start of every minute
+on 146.5650 MHz at low power (~0.5 W). Without a card it falls back to
+a pure morse beacon (`fox fox fox fox de W2WZ` at 10 WPM).
+
+## Voice recordings
+
+Put one or more WAV files in the root of a micro-SD card:
+
+- **Format**: mono PCM, 8- or 16-bit, any sample rate from 4 to 48 kHz
+  (16 kHz is plenty for FM voice). From any recording, one ffmpeg line:
+  `ffmpeg -i recording.m4a -ac 1 -ar 16000 fox.wav`
+  or in Audacity: Tracks > Mix > Stereo to Mono, set project rate to
+  16000, Export as WAV signed 16-bit PCM.
+- **Level**: the firmware loudness-normalizes each recording as it
+  loads (`VOICE_NORMALIZE`), compressing speech to a hot average level
+  with a soft limiter. This is not just for loudness: the SA868's mic
+  AGC amplifies its own hiss whenever the input is quiet, so keeping
+  the drive high keeps the transmitted noise floor down. Avoid long
+  stretches of dead air in recordings — the AGC hiss climbs back up
+  within about half a second of silence.
+- **Rotation**: files play in alphabetical order, one recording per
+  cycle — name them `01-intro.wav`, `02-taunt.wav`, ... to control the
+  order. If the TX window fits more than one play, the same recording
+  repeats within that cycle.
+- Files starting with `.` or `_` are ignored (macOS metadata).
+- Each recording is loaded into PSRAM before the transmitter keys: SD
+  card activity during transmission couples audible ticks into the TX
+  audio, so the card is never touched while on the air. Recordings up
+  to several minutes fit comfortably in the 8 MB PSRAM.
+
+If a file is unreadable it is skipped; if the card disappears or every
+file is bad, the fox falls back to the morse beacon rather than dying.
 
 ## How it works
 
@@ -35,6 +66,11 @@ Everything is in [include/fox_config.h](include/fox_config.h):
 | `TX_FREQUENCY_MHZ` | `146.5650` | Transmit frequency (must be in the module's band) |
 | `TONE_HZ` | `800` | Audio tone frequency |
 | `USE_HIGH_POWER` | `false` | `false` ≈ 0.5 W, `true` ≈ 1 W |
+| `START_ENABLED` | `true` | Whether the beacon transmits right after boot |
+| `VOICE_ENABLED` | `true` | Play SD-card recordings when present |
+| `MORSE_ID` | `de W2WZ` | Morse identification after each recording |
+| `VOICE_ID_GAP_MS` | `400` | Silence between recording and morse ID |
+| `VOICE_GAIN` | `170` | Playback level (170 = full-scale WAV at max clean drive) |
 
 Edit, then rebuild and reflash.
 
@@ -55,8 +91,11 @@ A press during a transmission stops the morse within about half a
 second and unkeys. Whether the beacon starts enabled after boot is the
 `START_ENABLED` setting.
 
-The OLED shows `Beacon Active` or `Beacon Inactive` plus the transmit
-frequency. If no display is detected the fox runs headless.
+The OLED shows `Beacon Active` or `Beacon Inactive` plus a live
+activity line: the recording being played (`voice: 01-intro.wav`), the
+morse segment (`morse: de W2WZ` or `morse beacon`), or the countdown to
+the next transmission (`next TX in 23s`). If no display is detected the
+fox runs headless.
 
 ## Status LED
 

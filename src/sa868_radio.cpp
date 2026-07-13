@@ -131,8 +131,13 @@ bool Sa868Radio::setFrequency(double frequencyMhz)
     if (!group_ok)
         return false;
 
-    // No squelch tail burst, bypass pre-emphasis/high-pass/low-pass filters
-    // (a pure audio tone needs no voice shaping).
+    // No squelch tail burst. Bypass the TX audio filters (1,1,1), same
+    // as the LilyGO factory firmware and ESP32APRS: with pre-emphasis
+    // OFF, the receiver's de-emphasis rolls off the mic-path AGC hiss
+    // by 6 dB/octave instead of hearing it flat, and the voice gets the
+    // classic mellow comms sound. (Measured A/B against the factory
+    // firmware; the earlier 0,0,0 setting made both voice and hiss
+    // arrive spectrally flat and harsh.)
     _command("AT+SETTAIL=0", response, RESPONSE_TIMEOUT_MS);
     _command("AT+SETFILTER=1,1,1", response, RESPONSE_TIMEOUT_MS);
     return true;
