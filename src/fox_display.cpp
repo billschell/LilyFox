@@ -34,6 +34,25 @@ bool FoxDisplay::begin()
     return available_;
 }
 
+void FoxDisplay::showBoot(const char *status)
+{
+    if (!available_)
+        return;
+
+    oled_.clearDisplay();
+    oled_.setTextColor(SH110X_WHITE);
+
+    oled_.setTextSize(1);
+    oled_.setCursor(0, 0);
+    oled_.printf("%s LilyFox %.3f", foxconfig::CALLSIGN, foxconfig::FREQUENCY_MHZ);
+
+    oled_.setTextSize(1);
+    oled_.setCursor(0, 32);
+    oled_.print(status);
+
+    oled_.display();
+}
+
 void FoxDisplay::show(bool beaconActive, const char *activity)
 {
     if (!available_)

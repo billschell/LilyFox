@@ -97,7 +97,7 @@ void loop()
 void FoxController::begin()
 {
     // PMU first: on Rev 2.0 the DC3 rail powers both the radio and the
-    // NeoPixel, so nothing is visible until it is enabled.
+    // NeoPixel, and it brings up the I2C bus the display needs.
     const bool pmu_online = power_.begin();
 
     // Blue LED as early as possible: proves the application is running
@@ -105,6 +105,12 @@ void FoxController::begin()
     status_led_.begin();
     status_led_.setBrightness(25);
     _showStatus(0, 0, 255); // blue = initializing
+
+    // Display immediately after: the SH1106 shows random power-on RAM
+    // until the first frame is drawn, so paint a boot screen before the
+    // slow parts of startup (serial grace period, SA868 bring-up).
+    const bool display_found = display_.begin();
+    display_.showBoot("Initializing (1)");
 
     Serial.begin(115200);
     // USB CDC re-enumerates after every reset; give a monitor time to
@@ -119,7 +125,7 @@ void FoxController::begin()
     Serial.println("PMU online, radio rail enabled");
     power_.printStatus();
 
-    if (display_.begin())
+    if (display_found)
         Serial.println("OLED display found");
     else
         Serial.println("No OLED display found; running headless");
@@ -129,6 +135,10 @@ void FoxController::begin()
     // mismatch, however, will never fix itself.
     for (int bring_up_round = 1;; bring_up_round++)
     {
+        char boot_status[22];
+        snprintf(boot_status, sizeof(boot_status), "Initializing (%d)", bring_up_round);
+        display_.showBoot(boot_status);
+
         // Always start the module from a true cold rail: an ESP reset
         // (USB monitor reconnect, flashing, brownout) mid-transmission
         // leaves the SA868 wedged, and it survives both PD-pin toggling

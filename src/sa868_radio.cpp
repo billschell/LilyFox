@@ -52,30 +52,21 @@ Sa868Radio::ProbeResult Sa868Radio::begin()
     // Some firmwares print a banner at boot; show whatever arrives.
     _dumpBootChatter(2000);
 
-    const uint32_t bauds[] = {9600, 115200};
-    for (uint32_t baud : bauds)
+    // The datasheet specifies 9600 baud only; probing other rates never
+    // succeeded in practice and just slowed the retry rounds down.
+    const ProbeResult result = _probeAtCurrentBaud();
+    if (result == ProbeResult::STOCK_OK)
     {
-        Serial.printf("--- probing SA868 at %lu baud ---\n",
-                      static_cast<unsigned long>(baud));
-        serial_.updateBaudRate(baud);
-        const ProbeResult result = _probeAtCurrentBaud();
-        if (result == ProbeResult::STOCK_OK)
-        {
-            // Classic SA868 vs SA868S: only the S answers AT+MODEL.
-            // Their DMOSETGROUP first fields differ (bandwidth vs TX
-            // power), so configure() needs to know which one this is.
-            String model;
-            s_series_ = _command("AT+MODEL", model, RESPONSE_TIMEOUT_MS) &&
-                        model.indexOf("SA868S") >= 0;
-            Serial.printf("Module variant: %s\n",
-                          s_series_ ? "SA868S (S-series)" : "classic SA868");
-            return result;
-        }
-        if (result != ProbeResult::NO_RESPONSE)
-            return result;
+        // Classic SA868 vs SA868S: only the S answers AT+MODEL.
+        // Their DMOSETGROUP first fields differ (bandwidth vs TX
+        // power), so configure() needs to know which one this is.
+        String model;
+        s_series_ = _command("AT+MODEL", model, RESPONSE_TIMEOUT_MS) &&
+                    model.indexOf("SA868S") >= 0;
+        Serial.printf("Module variant: %s\n",
+                      s_series_ ? "SA868S (S-series)" : "classic SA868");
     }
-    serial_.updateBaudRate(UART_BAUD);
-    return ProbeResult::NO_RESPONSE;
+    return result;
 }
 
 void Sa868Radio::_dumpBootChatter(uint32_t listenMs)

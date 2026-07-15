@@ -76,9 +76,8 @@ inline constexpr int32_t VOICE_GAIN = 170;
 
 // Loudness-normalize each recording when it is loaded: a fixed gain
 // brings speech up to VOICE_TARGET_RMS and a soft limiter keeps the
-// peaks clean. The SA868's mic AGC amplifies its own hiss whenever the
-// input is quiet, so keeping the average drive high keeps the AGC
-// gain - and its noise - wound down.
+// peaks clean, so recordings made at different levels all transmit
+// with consistent talk power.
 inline constexpr bool VOICE_NORMALIZE = true;
 
 
@@ -97,21 +96,13 @@ inline constexpr float VOICE_TARGET_RMS = 0.20f;
 inline constexpr uint32_t VOICE_LOWPASS_HZ = 3400;
 
 
-// Cap the length of silent pauses inside recordings when they load.
-// The SA868 mic AGC takes ~300 ms (measured) to wind its gain - and
-// its amplified hiss - back up after speech stops; pauses shorter than
-// that stay as quiet as morse inter-element gaps. Long pauses are
-// trimmed to VOICE_MAX_PAUSE_MS so the hiss never fully returns.
+// Cap the length of silent pauses inside recordings when they load
+// (trimmed to VOICE_MAX_PAUSE_MS). Originally an AGC-hiss mitigation
+// from the sigma-delta era; still recommended because it masks a
+// faint, regular ~8/s tick in the playback path that is audible in
+// long pauses (under investigation - suspected DMA feed artifact).
 inline constexpr bool VOICE_TRIM_PAUSES = true;
 inline constexpr uint32_t VOICE_MAX_PAUSE_MS = 250;
-
-// Pilot tone experiment (kept for reference): a constant low tone was
-// meant to hold the AGC down and be stripped by the TX high-pass, but
-// the SA868 transmits it at full volume - the mic-path high-pass does
-// not remove it. Leave disabled.
-inline constexpr bool VOICE_PILOT_ENABLED = false;
-inline constexpr uint32_t VOICE_PILOT_HZ = 150;
-inline constexpr int32_t VOICE_PILOT_LEVEL = 20;
 
 
 // Milliseconds to hold PTT before the first tone (transmitter settle

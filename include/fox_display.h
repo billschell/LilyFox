@@ -19,6 +19,11 @@ public:
     // being played, "morse: de W2WZ", "next TX in 23s").
     void show(bool beaconActive, const char *activity);
 
+    // Boot/progress screen: header plus one status line (e.g.
+    // "Initializing (2)"). Call as early as possible so the panel's
+    // random power-on RAM is replaced by something meaningful.
+    void showBoot(const char *status);
+
 private:
     Adafruit_SH1106G oled_{128, 64, &Wire, -1};
     bool available_ = false;

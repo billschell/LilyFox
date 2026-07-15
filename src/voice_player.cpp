@@ -215,10 +215,7 @@ bool VoicePlayer::play(const AbortPredicate &abort)
     if (samples_ == nullptr)
         return false;
 
-    const int32_t pilot_level =
-        foxconfig::VOICE_PILOT_ENABLED ? foxconfig::VOICE_PILOT_LEVEL : 0;
-    audio_.startVoice(sample_rate_, foxconfig::VOICE_GAIN,
-                      foxconfig::VOICE_PILOT_HZ, pilot_level);
+    audio_.startVoice(sample_rate_, foxconfig::VOICE_GAIN);
 
     // Feed the ring directly from PSRAM in small continuous reads.
     // (A batched-burst variant was tried and audibly clicked once per
