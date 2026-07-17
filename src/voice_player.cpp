@@ -237,6 +237,8 @@ bool VoicePlayer::play(const AbortPredicate &abort)
             delay(5); // ring full: comfortably ahead of the ISR
     }
 
+    if (!aborted)
+        audio_.feedComplete();
     while (!aborted && !audio_.voiceDrained())
     {
         if (abort && abort())

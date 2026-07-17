@@ -42,6 +42,9 @@ public:
     // immediately and discards queued samples.
     void startVoice(uint32_t sampleRateHz, int32_t gain);
     size_t queueVoice(const int16_t *samples, size_t count);
+    // Call once after the last queueVoice() so the underrun statistics
+    // exclude the expected zero-fill tail while the ring drains.
+    void feedComplete();
     bool voiceDrained() const;
     void endVoice();
     void abortVoice();

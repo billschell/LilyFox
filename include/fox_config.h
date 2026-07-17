@@ -97,13 +97,13 @@ inline constexpr uint32_t VOICE_LOWPASS_HZ = 3400;
 
 
 // Cap the length of silent pauses inside recordings when they load
-// (trimmed to VOICE_MAX_PAUSE_MS). Originally an AGC-hiss mitigation
-// from the sigma-delta era; still recommended because it masks a
-// faint, regular ~8/s tick in the playback path that is audible in
-// long pauses (under investigation - suspected DMA feed artifact).
+// (trimmed to VOICE_MAX_PAUSE_MS). Recommended on: long stretches of
+// transmitted digital silence carry a quiet rhythmic "motorboat"
+// artifact (radio-side; every digital layer was exonerated by
+// measurement - see audio_output.cpp), and short pauses keep it below
+// audibility while also tightening the message cadence.
 inline constexpr bool VOICE_TRIM_PAUSES = true;
 inline constexpr uint32_t VOICE_MAX_PAUSE_MS = 250;
-
 
 // Milliseconds to hold PTT before the first tone (transmitter settle
 // time) and after the last tone before unkeying.

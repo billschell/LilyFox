@@ -130,6 +130,17 @@ The ESP32-S3's USB port re-enumerates on every reset, and the monitor
 does not follow it — after any reset, quit (Ctrl+C) and rerun
 `pio device monitor`.
 
+Known artifact: long stretches of transmitted digital silence carry a
+quiet rhythmic "motorboat" sound. Extensive measurement exonerated
+every digital layer (DMA feed, underruns, ring geometry, descriptor
+alignment, auto-clear, modulator dither, oversample ratio); injected
+dither noise only masks it. It appears to originate in the radio's mic
+path when fed a perfectly silent line. `VOICE_TRIM_PAUSES` keeps
+silences short enough that it is not audible in practice. A future
+experiment is the I2S PDM "DAC line mode" slot configuration
+(`I2S_PDM_TX_SLOT_DAC_DEFAULT_CONFIG`), designed for RC-filter loads
+like this board's.
+
 Opening the monitor itself resets the chip (`rst:0x15
 USB_UART_CHIP_RESET`): this is ESP32-S3 USB-Serial/JTAG hardware
 behavior and cannot be fully suppressed without breaking auto-upload.

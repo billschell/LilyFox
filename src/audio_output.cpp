@@ -19,14 +19,18 @@ namespace
 {
 
 constexpr uint32_t TONE_SAMPLE_RATE_HZ = 16000;
-constexpr size_t TONE_BLOCK_FRAMES = 256;  // 16 ms per block at 16 kHz
-constexpr size_t VOICE_BLOCK_FRAMES = 512;
+// Write blocks exactly one DMA descriptor long (dma_frame_num): every
+// i2s_channel_write fills a whole descriptor, so writes never straddle
+// a descriptor boundary (the straddle point otherwise precesses around
+// the ring - suspected in the ring-period tick storms).
+constexpr size_t TONE_BLOCK_FRAMES = 480;
+constexpr size_t VOICE_BLOCK_FRAMES = 480;
 // Cap per queueVoice() call so the caller's abort check runs regularly.
 // Kept small: with a 2048-frame cap, a regular ~8/s tick was audible in
 // the transmitted audio, matching the call cadence (2048 frames at
 // 16 kHz = 128 ms) - some boundary artifact of the burstier feed
 // pattern. One DMA-write block per call spreads the work evenly.
-constexpr size_t VOICE_MAX_ACCEPT = 512;
+constexpr size_t VOICE_MAX_ACCEPT = 480;
 
 // Full-scale mapping: the sigma-delta backend drives +/-85 of its
 // +/-127 duty range at VOICE_GAIN 170. sample*gain/254 reproduces the
@@ -66,12 +70,29 @@ int32_t voice_gain = 0;
 volatile uint64_t voice_bytes_queued = 0;
 volatile uint64_t voice_bytes_sent = 0;
 
+// Underrun instrumentation: if the DMA sends more bytes than we have
+// queued, the difference was auto-cleared zeros on the air.
+volatile uint32_t underrun_events = 0;
+volatile uint64_t underrun_bytes = 0;
+volatile bool voice_feed_complete = false;
+uint32_t max_write_ms = 0;
+uint32_t max_gap_ms = 0;
+uint32_t last_write_end_ms = 0;
+
 // DMA completion callback: tracks how much queued voice audio has
 // actually left for the radio, so voiceDrained() is exact.
 bool IRAM_ATTR on_sent(i2s_chan_handle_t, i2s_event_data_t *event, void *)
 {
     if (source_mode == MODE_VOICE)
+    {
         voice_bytes_sent += event->size;
+        if (voice_bytes_sent > voice_bytes_queued && !voice_feed_complete)
+        {
+            underrun_events = underrun_events + 1;
+            underrun_bytes += voice_bytes_sent - voice_bytes_queued;
+            voice_bytes_sent = voice_bytes_queued; // re-arm for next event
+        }
+    }
     return false;
 }
 
@@ -107,7 +128,10 @@ void set_clock(uint32_t sample_rate)
     // integer-divided rate lands closest to the requested one, breaking
     // ties toward the highest PDM carrier (better RC suppression).
     constexpr uint64_t SCLK_HZ = 160000000ULL; // I2S_CLK_SRC_DEFAULT PLL
-    const int osr_options[] = {2, 3, 4, 5, 6, 8};
+    // Over-sample ratio fixed at 2, the value the IDF driver documents
+    // as standard. (Higher ratios raise the PDM carrier but were tested
+    // and made no audible difference through this board's RC filter.)
+    const int osr_options[] = {2};
     uint32_t best_fs = 480;
     uint32_t best_bclk_div = 8;
     uint64_t best_carrier = 0;
@@ -214,8 +238,14 @@ void AudioOutput::begin(int8_t outputPin, uint32_t toneHz)
     }
 
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
-    chan_cfg.dma_desc_num = 6;
-    chan_cfg.dma_frame_num = 240;
+    // 8 descriptors x 480 frames = ~240 ms of buffer; write blocks are
+    // descriptor-sized so no write straddles a descriptor boundary.
+    chan_cfg.dma_desc_num = 8;
+    chan_cfg.dma_frame_num = 480;
+    // auto_clear zeroes each buffer after it is sent, so the ring tail
+    // after the last real sample plays silence. (Tested false during
+    // the motorboat hunt: stale audio then replays at end of
+    // transmission as an audible click.)
     chan_cfg.auto_clear = true;
     ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_channel, nullptr));
 
@@ -233,6 +263,17 @@ void AudioOutput::begin(int8_t outputPin, uint32_t toneHz)
             .invert_flags = { .clk_inv = false },
         },
     };
+    // KNOWN ARTIFACT, unresolved: a quiet ~5-10/s "motorboat" sound is
+    // transmitted during long stretches of digital silence. Everything
+    // digital has been exonerated by measurement: the DMA feed is
+    // gapless, no underruns occur, and it persists across ring
+    // geometries, OSR choices, descriptor alignment, auto_clear on/off,
+    // stronger modulator dither (sd_dither), and injected dither noise
+    // (which only masks it). Most likely the radio's mic path reacting
+    // to a perfectly silent line. Mitigations: pause trimming keeps
+    // silences under the audible threshold. Future experiment: the
+    // I2S_PDM_TX_SLOT_DAC_DEFAULT_CONFIG "DAC line mode", designed for
+    // RC-filter loads like this board's.
     ESP_ERROR_CHECK(i2s_channel_init_pdm_tx_mode(tx_channel, &pdm_cfg));
 
     i2s_event_callbacks_t callbacks = {
@@ -289,6 +330,12 @@ void AudioOutput::startVoice(uint32_t sampleRateHz, int32_t gain)
     voice_gain = gain;
     voice_bytes_queued = 0;
     voice_bytes_sent = 0;
+    underrun_events = 0;
+    underrun_bytes = 0;
+    voice_feed_complete = false;
+    max_write_ms = 0;
+    max_gap_ms = 0;
+    last_write_end_ms = 0;
     amplitude_q8 = 0;
     target_amplitude_q8 = PEAK_AMPLITUDE << 8; // ramp in over ~5 ms
     source_mode = MODE_VOICE;
@@ -316,13 +363,24 @@ size_t AudioOutput::queueVoice(const int16_t *samples, size_t count)
             block[frame * 2] = static_cast<int16_t>(value);
             block[frame * 2 + 1] = static_cast<int16_t>(value);
         }
+        const uint32_t start_ms = millis();
+        if (last_write_end_ms != 0 && start_ms - last_write_end_ms > max_gap_ms)
+            max_gap_ms = start_ms - last_write_end_ms;
         size_t written = 0;
         i2s_channel_write(tx_channel, block, frame_count * 2 * sizeof(int16_t),
                           &written, portMAX_DELAY);
+        last_write_end_ms = millis();
+        if (last_write_end_ms - start_ms > max_write_ms)
+            max_write_ms = last_write_end_ms - start_ms;
         voice_bytes_queued += written;
         done += frame_count;
     }
     return count;
+}
+
+void AudioOutput::feedComplete()
+{
+    voice_feed_complete = true;
 }
 
 bool AudioOutput::voiceDrained() const
@@ -332,6 +390,12 @@ bool AudioOutput::voiceDrained() const
 
 void AudioOutput::endVoice()
 {
+    Serial.printf("I2S stats: %lu underrun event(s), %llu zero bytes on air, "
+                  "max write %lu ms, max writer gap %lu ms\n",
+                  static_cast<unsigned long>(underrun_events),
+                  static_cast<unsigned long long>(underrun_bytes),
+                  static_cast<unsigned long>(max_write_ms),
+                  static_cast<unsigned long>(max_gap_ms));
     // Recordings end in trimmed near-silence, so no fade-out is queued.
     i2s_channel_disable(tx_channel);
     set_clock(TONE_SAMPLE_RATE_HZ);
